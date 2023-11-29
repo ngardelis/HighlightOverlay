@@ -20,8 +20,6 @@ private struct CutoutFramePreferenceKey: PreferenceKey {
 public struct HighlightOverlay<MaskView: View>: ViewModifier {
     @Binding var highlightedView: String?
     var maskView: MaskView
-    var maskPadding: CGFloat = 24
-    var maskBlur: CGFloat = 4
     
     @State private var overlayFrame: CGRect = .zero
     @State private var maskFrames = [String: CGRect]()
@@ -44,12 +42,9 @@ public struct HighlightOverlay<MaskView: View>: ViewModifier {
                     Color.black.opacity(0.5)
                         
                     maskView
-                        .frame(width: overlayFrame.size.width + maskPadding,
-                               height: overlayFrame.size.height + maskPadding)
-                        .position(x: overlayFrame.midX, y: overlayFrame.midY)
-                        .blur(radius: maskBlur)
-                        .blendMode(.destinationOut)
-                        .animation(.easeOut(duration: 0.2), value: overlayFrame)
+                        .frame(width: overlayFrame.size.width,
+                               height: overlayFrame.size.height)
+                        .position(x: overlayFrame.midX, y: overlayFrame.midY) // circle position
                 }
                 .ignoresSafeArea()
                 .coordinateSpace(name: "HighlightOverlayCoordinateSpace")
@@ -81,65 +76,255 @@ public extension View {
     }
     
     func withHighlightOverlay(highlighting highlightedView: Binding<String?>,
-                              maskView: some View,
-                              maskPadding: CGFloat = 24,
-                              maskBlur: CGFloat = 4) -> some View {
+                              maskView: some View
+    ) -> some View {
         modifier(HighlightOverlay(highlightedView: highlightedView,
-                                  maskView: maskView,
-                                  maskPadding: maskPadding,
-                                  maskBlur: maskBlur))
+                                  maskView: maskView
+                                  ))
     }
 }
 
 // MARK: - Example & preview
 
 struct ExampleView: View {
-    @State private var highlightedView: String? = "gray"
+    // User input states
+    @State var username: String = ""
+    @State var password: String = ""
+    
+    // Which text field the user is currently interacting with
+    @State var textFieldMode: TextFieldMode = .unowned
+    
+    @State var showInfo: Bool = false
+    @State var isValidUserID: Bool = true
+    @State var isValidPassword: Bool = true
+    @State private var showLoginAlert: Bool = false
+    @State private var isLoggingIn = false
+    
+    @State var highlightedView: String? = nil
     
     var body: some View {
         VStack {
-            HStack {
-                coloredItem(.red)
-                    .tooltipItem("red")
-                    .onTapGesture { highlightedView = "red" }
-                coloredItem(.green)
-                    .tooltipItem("green")
-                    .onTapGesture { highlightedView = "green" }
+            Text("ok").foregroundStyle(.white)
+            VStack(spacing: 40) {
+                UserIDCustomTextField(text: Text("UserID"), value: $username, textFieldMode: $textFieldMode, isValidUserID: $isValidUserID, highlightedView: $highlightedView)
+                    
+                PasswordCustomTextField(text: Text("Password"), value: $password, textFieldMode: $textFieldMode, isValidPassword: $isValidPassword, highlightedView: $highlightedView)
             }
-            HStack {
-                coloredItem(.blue)
-                    .tooltipItem("blue")
-                    .onTapGesture { highlightedView = "blue" }
-                coloredItem(.yellow)
-                    .tooltipItem("yellow")
-                    .onTapGesture { highlightedView = "yellow" }
-            }
-            HStack {
-                coloredItem(.gray)
-                    .tooltipItem("gray")
-                    .onTapGesture { highlightedView = "gray" }
-                coloredItem(.purple)
-                    .tooltipItem("purple")
-                    .onTapGesture { highlightedView = "purple" }
-            }
-            
-            coloredItem(.black)
-                .onTapGesture { highlightedView = nil }
         }
         .withHighlightOverlay(
             highlighting: $highlightedView,
-            maskView: coloredItem(.black)
+            maskView: item()
         )
+        .background(BackgroundImage())
+        .onTapGesture { highlightedView = nil }
     }
     
-    func coloredItem(_ color: Color) -> some View {
-        Circle()
-            .foregroundColor(color)
+    @ViewBuilder
+    func item() -> some View {
+        if textFieldMode == .userID {
+            HighlightedHeader(text: "UserID")
+        } else if textFieldMode == .password {
+            HighlightedHeader(text: "Password")
+        }
     }
 }
 
 struct ExampleView_Preview: PreviewProvider {
     static var previews: some View {
         ExampleView()
+    }
+}
+
+
+
+
+struct UserIDCustomTextField: View {
+    var text: Text
+    @Binding var value: String
+    @Binding var textFieldMode: TextFieldMode
+    @Binding var isValidUserID: Bool
+    @Binding var highlightedView: String?
+    
+    // Declared as static so they aren't recreated every time the body renders
+    private static let userIDRegex = "^[A-Z]{2}\\d{4}$"
+    
+    var body: some View {
+        VStack {
+            header.tooltipItem("userID")
+            ZStack(alignment: .trailing) {
+                inputField
+                    .font(.callout)
+                    .foregroundStyle(.white)
+                errorIcon
+                    .offset(y: -5)
+            }.frame(height: 20)
+            dividerBasedOnValidation
+        }.padding(.horizontal, 30)
+    }
+    
+    private var header: some View {
+        HStack {
+            text.font(.body).foregroundStyle(.white)
+            infoButton // Button to display regex information
+            Spacer()
+        }
+    }
+    
+    private var infoButton: some View {
+        Button {
+            textFieldMode = .userID
+            highlightedView = "userID"
+        } label: {
+            Image("ic_info").resizable().frame(width: 20, height: 20).padding(.horizontal, 5)
+        }
+    }
+    
+    private var inputField: some View {
+        TextField("", text: $value)
+            .onChange(of: value, perform: validateUserID)
+    }
+    
+    // Function to validate user ID based on the regex pattern
+    private func validateUserID(_ userID: String) {
+        // If the userID is empty, consider it valid. Else, use the regex to validate
+        isValidUserID = userID.isEmpty ? true : NSPredicate(format: "SELF MATCHES %@", UserIDCustomTextField.userIDRegex).evaluate(with: userID)
+    }
+    
+    private var errorIcon: some View {
+        Group {
+            if (!isValidUserID) {
+                Image("ic_error").resizable().frame(width: 6, height: 32)
+            }
+        }
+    }
+    
+    private var dividerBasedOnValidation: some View {
+        Divider()
+            .frame(height: 2)
+            .background(dividerColor) // Color based on validation state
+            .offset(y: -2)
+    }
+    
+    private var dividerColor: Color {
+        // Determine the divider color based on validation state
+        return isValidUserID ? Color("50a235_green") : .red
+    }
+}
+
+struct PasswordCustomTextField: View {
+    var text: Text
+    @Binding var value: String
+    @Binding var textFieldMode: TextFieldMode
+    @Binding var isValidPassword: Bool
+    @State var showPassword: Bool = false
+    @Binding var highlightedView: String?
+    
+    private static let passwordRegex = "^(?=.*[A-Z].*[A-Z])(?=.*[!@#$&*])(?=.*\\d.*\\d)(?=.*[a-z].*[a-z].*[a-z]).{8}$"
+    
+    var body: some View {
+        VStack {
+            header.tooltipItem("password")
+            ZStack(alignment: .trailing) {
+                inputField
+                    .font(.callout)
+                    .foregroundStyle(.white)
+                errorIcon
+                    .offset(y: -5)
+            }.frame(height: 20)
+            dividerBasedOnValidation
+        }.padding(.horizontal, 30)
+    }
+    
+    private var header: some View {
+        HStack {
+           text.font(.body).foregroundStyle(.white)
+            infoButton // Button to display regex information
+            Spacer()
+            showPasswordButton // Button to toggle password visibility
+        }
+    }
+    
+    private var infoButton: some View {
+        Button {
+            textFieldMode = .password
+            highlightedView = "password"
+        } label: {
+            Image("ic_info").resizable().frame(width: 20, height: 20).padding(.horizontal, 5)
+        }
+    }
+    
+    @ViewBuilder
+    private var inputField: some View {
+        if showPassword {
+            TextField("", text: $value)
+                .onChange(of: value, perform: validatePassword)
+        } else {
+            SecureField("", text: $value)
+                .onChange(of: value, perform: validatePassword)
+        }
+    }
+    
+    // Function to validate user ID based on the regex pattern
+    private func validatePassword(_ password: String) {
+        // If the password is empty, consider it valid. Else, use the regex to validate
+        isValidPassword = password.isEmpty ? true : NSPredicate(format: "SELF MATCHES %@", PasswordCustomTextField.passwordRegex).evaluate(with: password)
+    }
+    
+    private var errorIcon: some View {
+        Group {
+            if (!isValidPassword) {
+                Image("ic_error").resizable().frame(width: 6, height: 32)
+            }
+        }
+    }
+    
+    private var dividerBasedOnValidation: some View {
+        Divider()
+            .frame(height: 2)
+            .background(dividerColor) // Color based on validation state
+            .offset(y: -2)
+    }
+    
+    private var dividerColor: Color {
+        // Determine the divider color based on validation state
+        return isValidPassword ? Color("50a235_green") : .red
+    }
+    
+    private var showPasswordButton: some View {
+        Button {
+            showPassword.toggle()
+        } label: {
+            Text("show").font(.footnote).fontWeight(.semibold)
+        }
+        .foregroundStyle(Color("forest_green"))
+    }
+}
+
+// Represents which text field the user is currently interacting with
+enum TextFieldMode {
+    case userID, password, unowned
+}
+
+struct BackgroundImage: View {
+    var body: some View {
+        Image("bg_gradient")
+            .scaledToFill()
+            .edgesIgnoringSafeArea(.all)
+    }
+}
+
+struct HighlightedHeader: View {
+    var text: String
+    
+    var body: some View {
+        HStack {
+            Text(text).font(.body).foregroundStyle(.white)
+            infoIMG // Button to display regex information
+            Spacer()
+        }
+    }
+    
+    private var infoIMG: some View {
+        Image(.icInfo).resizable().frame(width: 20, height: 20).padding(.horizontal, 5)
     }
 }
