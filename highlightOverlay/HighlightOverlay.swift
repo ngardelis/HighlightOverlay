@@ -19,6 +19,7 @@ private struct CutoutFramePreferenceKey: PreferenceKey {
 
 public struct HighlightOverlay<MaskView: View>: ViewModifier {
     @Binding var highlightedView: String?
+    @Binding var textFieldMode: TextFieldMode
     var maskView: MaskView
     
     @State private var overlayFrame: CGRect = .zero
@@ -39,12 +40,12 @@ public struct HighlightOverlay<MaskView: View>: ViewModifier {
             
             if overlayFrame != .zero {
                 ZStack {
-                    Color.black.opacity(0.5)
-                        
+                    Color.black.opacity(0.1)
+                    ShowInfoView(textFieldMode: $textFieldMode)
                     maskView
                         .frame(width: overlayFrame.size.width,
                                height: overlayFrame.size.height)
-                        .position(x: overlayFrame.midX, y: overlayFrame.midY) // circle position
+                        .position(x: overlayFrame.midX, y: overlayFrame.midY)
                 }
                 .ignoresSafeArea()
                 .coordinateSpace(name: "HighlightOverlayCoordinateSpace")
@@ -75,12 +76,12 @@ public extension View {
         modifier(HighlightedItem(id: id))
     }
     
-    func withHighlightOverlay(highlighting highlightedView: Binding<String?>,
+    func withHighlightOverlay(highlighting highlightedView: Binding<String?>, textFieldMode: Binding<TextFieldMode>,
                               maskView: some View
     ) -> some View {
-        modifier(HighlightOverlay(highlightedView: highlightedView,
+        modifier(HighlightOverlay(highlightedView: highlightedView, textFieldMode: textFieldMode,
                                   maskView: maskView
-                                  ))
+                                 ))
     }
 }
 
@@ -104,15 +105,16 @@ struct ExampleView: View {
     
     var body: some View {
         VStack {
-            Text("ok").foregroundStyle(.white)
             VStack(spacing: 40) {
                 UserIDCustomTextField(text: Text("UserID"), value: $username, textFieldMode: $textFieldMode, isValidUserID: $isValidUserID, highlightedView: $highlightedView)
                     
                 PasswordCustomTextField(text: Text("Password"), value: $password, textFieldMode: $textFieldMode, isValidPassword: $isValidPassword, highlightedView: $highlightedView)
             }
+            Spacer()
         }
         .withHighlightOverlay(
             highlighting: $highlightedView,
+            textFieldMode: $textFieldMode,
             maskView: item()
         )
         .background(BackgroundImage())
@@ -135,7 +137,56 @@ struct ExampleView_Preview: PreviewProvider {
     }
 }
 
-
+struct ShowInfoView: View {
+    @Binding var textFieldMode: TextFieldMode
+    
+    var body: some View {
+        ZStack(alignment: .center) {
+            Rectangle().fill(Color("onyx"))
+            contentDisplay
+        }
+        .opacity(0.9)
+        .ignoresSafeArea()
+    }
+    
+    private var backgroundShape: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(.black.opacity(0.7))
+    }
+    
+    private var contentDisplay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 15)
+                .frame(height: 100)
+                .padding(.horizontal, 20)
+            if textFieldMode == .userID {
+                userIDText
+            } else if textFieldMode == .password {
+                passwordText
+            }
+        }
+    }
+    
+    private var userIDText: some View {
+        VStack {
+            Text("userIDText")
+            Text("userIDText")
+            Text("userIDText")
+        }
+        .foregroundStyle(.white)
+        .font(.subheadline)
+    }
+    
+    private var passwordText: some View {
+        VStack {
+            Text("passwordText")
+            Text("passwordText")
+            Text("passwordText")
+        }
+        .foregroundStyle(.white)
+        .font(.subheadline)
+    }
+}
 
 
 struct UserIDCustomTextField: View {
@@ -301,7 +352,7 @@ struct PasswordCustomTextField: View {
 }
 
 // Represents which text field the user is currently interacting with
-enum TextFieldMode {
+public enum TextFieldMode {
     case userID, password, unowned
 }
 
